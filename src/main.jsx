@@ -3,11 +3,10 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 
-// Development-only performance monitor
-// Uncomment the import above to use: import Stats from 'stats.js'
-// Then add <StatsPanel /> to the render tree during development
+// Development-only FPS/memory monitor using stats.js
+// stats.js is installed as a devDependency and auto-instruments
+// the requestAnimationFrame loop when loaded
 if (import.meta.env.DEV) {
-  // Lazy-load only in dev mode — never shipped to production
   import('stats.js').then(({ default: Stats }) => {
     const stats = new Stats()
     stats.showPanel(0) // 0: fps, 1: ms, 2: memory
@@ -18,7 +17,7 @@ if (import.meta.env.DEV) {
     stats.dom.style.zIndex = '100'
     document.body.appendChild(stats.dom)
 
-    // Patch requestAnimationFrame to auto-instrument stats
+    // Instrument requestAnimationFrame with stats.begin/end
     const origRAF = window.requestAnimationFrame
     window.requestAnimationFrame = (cb) => {
       return origRAF.call(window, (t) => {

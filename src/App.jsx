@@ -50,7 +50,8 @@ function App() {
       // Sync initial active chain states to pipeline
       updatePipelineChain(effectsChain);
 
-      // Wire up error handler
+      // Wire up error handler (save previous for cleanup)
+      const prevOnError = inputManager.onError;
       inputManager.onError = (msg) => {
         setErrorMessage(msg);
         // Auto-dismiss after 6 seconds
@@ -66,13 +67,20 @@ function App() {
       }
       
       setAppReady(true);
+
+      // Store cleanup reference
+      return () => {
+        inputManager.onError = prevOnError;
+      };
     };
 
-    initApp();
+    const cleanupFn = initApp();
 
     return () => {
       inputManager.dispose();
       pipeline.dispose();
+      // Also clean up onError if init completed
+      cleanupFn.then(cb => { if (cb) cb(); });
     };
   }, []);
 
