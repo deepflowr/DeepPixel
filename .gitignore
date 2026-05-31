@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local plan file (not for GitHub)
+Deep Pixel glitch-dither-webapp-plan.md
