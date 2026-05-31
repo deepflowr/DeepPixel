@@ -15,6 +15,14 @@ export default {
       default: 0.3,
       step: 0.02
     },
+    speed: {
+      type: 'float',
+      label: 'Scroll',
+      min: 0.0,
+      max: 10.0,
+      default: 0.0,
+      step: 0.5
+    },
     spacing: {
       type: 'select',
       label: 'Espaciado',

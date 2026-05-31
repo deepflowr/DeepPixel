@@ -1,19 +1,19 @@
 import vertexShader from '../shaders/common.vert.glsl?raw';
-import fragmentShader from '../shaders/halftone.frag.glsl?raw';
+import fragmentShader from '../shaders/crosshatch.frag.glsl?raw';
 
 export default {
-  id: 'halftone',
-  label: 'Halftone',
-  category: 'print',
+  id: 'crosshatch',
+  label: 'Crosshatch',
+  category: 'dither',
 
   params: {
-    dotSize: {
-      type: 'int',
-      label: 'Tamaño Punto',
-      min: 2,
-      max: 20,
-      default: 6,
-      step: 1
+    scale: {
+      type: 'float',
+      label: 'Escala',
+      min: 2.0,
+      max: 40.0,
+      default: 12.0,
+      step: 1.0
     },
     contrast: {
       type: 'float',
@@ -33,10 +33,10 @@ export default {
     },
     angle: {
       type: 'float',
-      label: 'Ángulo Trama',
+      label: 'Ángulo',
       min: 0.0,
       max: 6.28,
-      default: 0.78,
+      default: 0.0,
       step: 0.05
     },
     palette: {

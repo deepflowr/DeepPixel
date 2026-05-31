@@ -178,12 +178,13 @@ function applyEXIFOrientation(img, orientation) {
 
 class InputManager {
   constructor() {
-    this.activeSource = 'image'; // 'camera' | 'image' | 'video' | 'none'
+    this.activeSource = 'procedural'; // 'camera' | 'image' | 'video' | 'procedural' | 'none'
     this.activeTexture = null;
     this.aspectRatio = 1.0;
     this.videoElement = null;
     this.videoStream = null;
     this.imageElement = null;
+    this.proceduralSource = null;
     this.onTextureLoaded = null; // Callback: (texture, aspectRatio) => void
     this.onError = null;          // Callback: (message: string) => void
 
@@ -416,9 +417,36 @@ class InputManager {
         this.activeTexture.needsUpdate = true;
       }
     }
+    if (this.activeSource === 'procedural' && this.proceduralSource) {
+      this.proceduralSource.update();
+      if (this.activeTexture) {
+        this.activeTexture.needsUpdate = true;
+      }
+    }
   }
 
   getTexture() {
+    return this.activeTexture;
+  }
+
+  // Set a procedural animated source as input
+  async setProceduralSource(proceduralSource, type) {
+    this.cleanupActiveSource();
+    this.activeSource = 'procedural';
+    this.proceduralSource = proceduralSource;
+    this.proceduralSource.setType(type);
+
+    // Render first frame
+    this.proceduralSource.update(0);
+
+    this.aspectRatio = this.proceduralSource.canvas.width / this.proceduralSource.canvas.height;
+    this.activeTexture = new THREE.CanvasTexture(this.proceduralSource.canvas);
+    this.activeTexture.minFilter = THREE.LinearFilter;
+    this.activeTexture.magFilter = THREE.LinearFilter;
+
+    if (this.onTextureLoaded) {
+      this.onTextureLoaded(this.activeTexture, this.aspectRatio);
+    }
     return this.activeTexture;
   }
 
@@ -450,6 +478,7 @@ class InputManager {
     }
 
     this.imageElement = null;
+    this.proceduralSource = null;
   }
 
   dispose() {

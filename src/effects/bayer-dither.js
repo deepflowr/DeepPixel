@@ -21,6 +21,14 @@ export default {
       options: [2, 4, 8],
       default: 4
     },
+    speed: {
+      type: 'float',
+      label: 'Velocidad',
+      min: 0.0,
+      max: 5.0,
+      default: 0.5,
+      step: 0.1
+    },
     pixelSize: {
       type: 'int',
       label: 'Pixelado',
@@ -29,21 +37,12 @@ export default {
       default: 1,
       step: 1
     },
-    hue: {
-      type: 'float',
-      label: 'Tono (Hue)',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0,
-      step: 0.01
-    },
-    saturation: {
-      type: 'float',
-      label: 'Saturación',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0, // Pure black & white by default!
-      step: 0.01
+    palette: {
+      type: 'palette',
+      label: 'Paleta',
+      default: ['#000000', '#ffffff'],
+      minColors: 2,
+      maxColors: 8
     }
   },
   

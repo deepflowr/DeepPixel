@@ -4,6 +4,16 @@ import floydSteinberg from './floyd-steinberg';
 import halftone from './halftone';
 import risograph from './risograph';
 import glitch from './glitch';
+import posterize from './posterize';
+import kaleidoscope from './kaleidoscope';
+import feedback from './feedback';
+import cmykHalftone from './cmyk-halftone';
+import atkinsonDither from './atkinson-dither';
+import stucki from './stucki';
+import jarvis from './jarvis';
+import clusteredDot from './clustered-dot';
+import crosshatch from './crosshatch';
+import brickDither from './brick-dither';
 
 // Registry of all available effects in DeepPixel
 export const AVAILABLE_EFFECTS = [
@@ -12,7 +22,17 @@ export const AVAILABLE_EFFECTS = [
   floydSteinberg,
   halftone,
   risograph,
-  glitch
+  glitch,
+  posterize,
+  kaleidoscope,
+  feedback,
+  cmykHalftone,
+  atkinsonDither,
+  stucki,
+  jarvis,
+  clusteredDot,
+  crosshatch,
+  brickDither
 ];
 
 export const getEffectById = (id) => {

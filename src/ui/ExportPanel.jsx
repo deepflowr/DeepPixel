@@ -1,32 +1,30 @@
 import React, { useRef } from 'react';
 
-// Selected aesthetic high-contrast public image URLs
-export const STOCK_SAMPLES = [
+// Procedural source definitions for VJing
+export const PROC_SOURCES = [
   {
-    id: 'brutalist-concrete',
-    label: 'Hormigón',
-    url: 'https://images.unsplash.com/photo-1600585154526-990dced4db0d?q=80&w=600&auto=format&fit=crop',
-    description: 'Sombras duras y ángulos de hormigón brutalista'
+    id: 'test-pattern',
+    label: 'Barras de Prueba',
+    description: 'Barras de color SMPTE + rampa de grises + checkerboard + ruido fino. Ideal para calibrar efectos.'
   },
   {
-    id: 'retro-tech',
-    label: 'CRT Macro',
-    url: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=600&auto=format&fit=crop',
-    description: 'Equipos y cables retro con texturas analógicas'
+    id: 'crt-texture',
+    label: 'Textura CRT',
+    description: 'Ruido pixelado animado con bandas VHS, fringe cromático y barras de scan. Alta frecuencia para dithering.'
   },
   {
-    id: 'contrast-tunnel',
-    label: 'Silueta',
-    url: 'https://images.unsplash.com/photo-1509198397868-475647b2a1e5?q=80&w=600&auto=format&fit=crop',
-    description: 'Contraluz extremo en túnel retroiluminado'
+    id: 'moire',
+    label: 'Moiré Geométrico',
+    description: 'Círculos concéntricos, spoke pattern y grilla rotatoria. Crea patrones de interferencia con halftone.'
   }
 ];
 
 const ExportPanel = ({ 
-  mode = 'input', // 'input' | 'export'
+  mode = 'input',
   inputManager, 
   activeSource, 
-  onSourceChange, 
+  onSourceChange,
+  onProceduralSource,
   onExportPNG,
   onExportSVG,
   svgExportable = false,
@@ -37,7 +35,7 @@ const ExportPanel = ({
   const fileInputRef = useRef(null);
   const presetInputRef = useRef(null);
 
-  // Handle uploading static files (images or video)
+  // Handle uploading video files
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -49,14 +47,14 @@ const ExportPanel = ({
       await inputManager.setVideo(file);
       onSourceChange('video', file.name);
     } else {
-      alert('Formato de archivo no soportado. Sube una imagen o video compatible.');
+      alert('Formato de archivo no soportado. Subí un video o imagen compatible.');
     }
   };
 
-  // Set one of our custom stocks
-  const handleSelectSample = async (sample) => {
-    await inputManager.setImage(sample.url);
-    onSourceChange('image', `Muestra: ${sample.label}`);
+  // Set procedural animated source
+  const handleSelectProcedural = (source) => {
+    onProceduralSource(source.id);
+    onSourceChange('procedural', `Procedural: ${source.label}`);
   };
 
   // Activate webcam stream
@@ -65,11 +63,11 @@ const ExportPanel = ({
       await inputManager.setCamera();
       onSourceChange('camera', 'Cámara Web');
     } catch (e) {
-      alert('No se pudo acceder a la cámara. Revisa los permisos de tu navegador.');
+      // Error handled by inputManager.onError
     }
   };
 
-  // Export complete session state to JSON
+  // Export session state to JSON
   const handleExportJSON = () => {
     const presetData = {
       version: '1.0',
@@ -89,7 +87,7 @@ const ExportPanel = ({
     URL.revokeObjectURL(url);
   };
 
-  // Import JSON preset session
+  // Import JSON preset
   const handleImportJSONClick = () => {
     if (presetInputRef.current) {
       presetInputRef.current.click();
@@ -119,7 +117,7 @@ const ExportPanel = ({
   if (mode === 'input') {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* 1. INPUT SOURCES SECTION */}
+        {/* 1. INPUT SOURCE BUTTONS */}
         <div>
           <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
             <button 
@@ -148,22 +146,26 @@ const ExportPanel = ({
           />
         </div>
 
-        {/* 2. PRE-LOADED TEMPLATE GALLERY */}
+        {/* 2. PROCEDURAL GENERATIVE SOURCES (VJing) */}
         <div>
           <label className="fader-label-row" style={{ display: 'block', marginBottom: '8px' }}>
-            IMÁGENES DE MUESTRA
+            GENERADORES EN VIVO
           </label>
-          <div className="sample-grid">
-            {STOCK_SAMPLES.map((sample) => (
-              <div 
-                key={sample.id}
-                className={`sample-thumbnail ${activeSource === 'image' && inputManager.imageElement && inputManager.imageElement.src === sample.url ? 'active' : ''}`}
-                style={{ backgroundImage: `url(${sample.url})` }}
-                title={sample.description}
-                onClick={() => handleSelectSample(sample)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {PROC_SOURCES.map((source) => (
+              <button
+                key={source.id}
+                className={`heavy-btn ${activeSource === 'procedural' && inputManager.activeTexture && inputManager.proceduralSource?.type === source.id ? 'active' : ''}`}
+                style={{ width: '100%', justifyContent: 'flex-start', fontSize: '0.75rem', gap: '8px' }}
+                onClick={() => handleSelectProcedural(source)}
+                title={source.description}
               >
-                <div className="sample-thumbnail-label">{sample.label}</div>
-              </div>
+                <span className={`status-led ${activeSource === 'procedural' ? 'orange' : ''}`} style={{ width: '6px', height: '6px' }} />
+                <span>{source.label.toUpperCase()}</span>
+                <span style={{ marginLeft: 'auto', fontSize: '0.55rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
+                  VJ
+                </span>
+              </button>
             ))}
           </div>
         </div>
@@ -171,7 +173,7 @@ const ExportPanel = ({
     );
   }
 
-  // Otherwise: mode === 'export'
+  // mode === 'export'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
       <input 

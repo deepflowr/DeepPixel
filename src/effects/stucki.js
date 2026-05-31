@@ -1,8 +1,8 @@
 export default {
-  id: 'floyd-steinberg',
-  label: 'Dither Floyd-Steinberg',
+  id: 'stucki',
+  label: 'Dither Stucki',
   category: 'dither',
-  
+
   params: {
     threshold: {
       type: 'float',
@@ -26,15 +26,15 @@ export default {
       maxColors: 8
     }
   },
-  
+
   renderer: 'cpu',
   svgExportable: true,
 
-  // CPU error diffusion processing function
+  // Stucki error diffusion — high quality, 12 neighbors
+  // Weights: 8/42, 4/42, 2/42, 1/42
+  // Now supports multi-color palettes via nearest-luminance quantization
   processFn: (imageData, params) => {
-    const { w, h, data } = { w: imageData.width, h: imageData.height, data: imageData.data };
-    
-    // ── Parse palette and compute per-color luminance ──
+    const w = imageData.width, h = imageData.height, data = imageData.data;
     const palette = params.palette || ['#000000', '#ffffff'];
     const hexToRgb = (hex) => {
       hex = hex.replace('#', '');
@@ -47,24 +47,20 @@ export default {
     };
     const paletteColors = palette.map(hex => hexToRgb(hex));
     const paletteSize = paletteColors.length;
-
-    // Precompute luminance for each palette color
     const paletteLums = paletteColors.map(c => c[0] * 0.299 + c[1] * 0.587 + c[2] * 0.114);
 
-    // Keep a float luminance array for error propagation
     const lums = new Float32Array(w * h);
     for (let i = 0; i < w * h; i++) {
       const idx = i * 4;
       lums[i] = data[idx] * 0.299 + data[idx+1] * 0.587 + data[idx+2] * 0.114;
     }
 
-    // Floyd-Steinberg Error Diffusion Loop
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const idx = x + y * w;
         const oldL = lums[idx];
-        
-        // ── Find nearest palette color by luminance ──
+
+        // Find nearest palette color by luminance
         let bestIdx = 0;
         let bestDist = Infinity;
         for (let p = 0; p < paletteSize; p++) {
@@ -76,32 +72,29 @@ export default {
         }
         const newL = paletteLums[bestIdx] * 255;
         const err = oldL - newL;
-        
-        // Propagate error to neighbors
-        if (x + 1 < w) {
-          lums[(x + 1) + y * w] += err * (7.0 / 16.0);
-        }
-        if (x - 1 >= 0 && y + 1 < h) {
-          lums[(x - 1) + (y + 1) * w] += err * (3.0 / 16.0);
-        }
-        if (y + 1 < h) {
-          lums[x + (y + 1) * w] += err * (5.0 / 16.0);
-        }
-        if (x + 1 < w && y + 1 < h) {
-          lums[(x + 1) + (y + 1) * w] += err * (1.0 / 16.0);
-        }
 
-        // ── Output the nearest palette color ──
+        // Stucki 12-neighbor kernel
+        if (x + 1 < w) lums[(x + 1) + y * w] += err * (8.0 / 42.0);
+        if (x + 2 < w) lums[(x + 2) + y * w] += err * (4.0 / 42.0);
+        if (x - 2 >= 0 && y + 1 < h) lums[(x - 2) + (y + 1) * w] += err * (2.0 / 42.0);
+        if (x - 1 >= 0 && y + 1 < h) lums[(x - 1) + (y + 1) * w] += err * (4.0 / 42.0);
+        if (y + 1 < h) lums[x + (y + 1) * w] += err * (8.0 / 42.0);
+        if (x + 1 < w && y + 1 < h) lums[(x + 1) + (y + 1) * w] += err * (4.0 / 42.0);
+        if (x + 2 < w && y + 1 < h) lums[(x + 2) + (y + 1) * w] += err * (2.0 / 42.0);
+        if (x - 2 >= 0 && y + 2 < h) lums[(x - 2) + (y + 2) * w] += err * (1.0 / 42.0);
+        if (x - 1 >= 0 && y + 2 < h) lums[(x - 1) + (y + 2) * w] += err * (2.0 / 42.0);
+        if (y + 2 < h) lums[x + (y + 2) * w] += err * (4.0 / 42.0);
+        if (x + 1 < w && y + 2 < h) lums[(x + 1) + (y + 2) * w] += err * (2.0 / 42.0);
+        if (x + 2 < w && y + 2 < h) lums[(x + 2) + (y + 2) * w] += err * (1.0 / 42.0);
+
         const targetPixelIdx = idx * 4;
         const mappedColor = paletteColors[bestIdx];
-        
         data[targetPixelIdx] = Math.round(mappedColor[0] * 255);
         data[targetPixelIdx + 1] = Math.round(mappedColor[1] * 255);
         data[targetPixelIdx + 2] = Math.round(mappedColor[2] * 255);
         data[targetPixelIdx + 3] = 255;
       }
     }
-
     return imageData;
   }
 };

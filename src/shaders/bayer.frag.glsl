@@ -3,37 +3,33 @@ uniform float uThreshold;
 uniform int uMatrixSize;
 uniform float uPixelSize;
 uniform vec2 uResolution;
-uniform float uHue;
-uniform float uSaturation;
+uniform float uTime;
+uniform float uSpeed;
+uniform int uPaletteSize;
+uniform vec3 uColor0;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform vec3 uColor4;
+uniform vec3 uColor5;
+uniform vec3 uColor6;
+uniform vec3 uColor7;
 
 varying vec2 vUv;
 
-// Helper to convert Hue, Saturation, Lightness to RGB
-float hue2rgb(float f1, float f2, float hue) {
-    if (hue < 0.0) hue += 1.0;
-    if (hue > 1.0) hue -= 1.0;
-    if (hue < 1.0/6.0) return f1 + (f2 - f1) * 6.0 * hue;
-    if (hue < 1.0/2.0) return f2;
-    if (hue < 2.0/3.0) return f1 + (f2 - f1) * (2.0/3.0 - hue) * 6.0;
-    return f1;
+float getLuminance(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
-vec3 hsl2rgb(vec3 hsl) {
-    vec3 rgb;
-    if (hsl.y == 0.0) {
-        rgb = vec3(hsl.z); // Grayscale
-    } else {
-        float f2;
-        if (hsl.z < 0.5)
-            f2 = hsl.z * (1.0 + hsl.y);
-        else
-            f2 = hsl.z + hsl.y - hsl.z * hsl.y;
-        float f1 = 2.0 * hsl.z - f2;
-        rgb.r = hue2rgb(f1, f2, hsl.x + 1.0/3.0);
-        rgb.g = hue2rgb(f1, f2, hsl.x);
-        rgb.b = hue2rgb(f1, f2, hsl.x - 1.0/3.0);
-    }
-    return rgb;
+vec3 getPaletteColor(int idx) {
+    if (idx == 0) return uColor0;
+    if (idx == 1) return uColor1;
+    if (idx == 2) return uColor2;
+    if (idx == 3) return uColor3;
+    if (idx == 4) return uColor4;
+    if (idx == 5) return uColor5;
+    if (idx == 6) return uColor6;
+    return uColor7;
 }
 
 // Bayer 2x2 matrix values
@@ -70,10 +66,6 @@ float getBayer8(int x, int y) {
     return subVal * 4.0 + quadVal;
 }
 
-float getLuminance(vec3 color) {
-    return dot(color, vec3(0.299, 0.587, 0.114));
-}
-
 void main() {
     vec2 uv = vUv;
     if (uPixelSize > 1.0) {
@@ -89,8 +81,10 @@ void main() {
         fragCoord = floor(gl_FragCoord.xy / uPixelSize) * uPixelSize;
     }
     
-    int px = int(fragCoord.x / max(1.0, uPixelSize));
-    int py = int(fragCoord.y / max(1.0, uPixelSize));
+    // ── Temporal: grid drift over time ──
+    float timeOffset = uTime * uSpeed * 30.0;
+    int px = int((fragCoord.x + timeOffset) / max(1.0, uPixelSize));
+    int py = int((fragCoord.y + timeOffset * 0.7) / max(1.0, uPixelSize));
     
     float matrixValue = 0.0;
     float maxVal = 1.0;
@@ -106,19 +100,24 @@ void main() {
         maxVal = 16.0;
     }
     
+    // ── Multi-level quantization with Bayer dither ──
+    int paletteSize = uPaletteSize;
+    float numLevels = float(paletteSize - 1);
+    
+    // Map luminance to continuous position in palette
     float ditherValue = (matrixValue + 0.5) / maxVal;
-    float ditherResult = lum + (ditherValue - 0.5) * (1.0 - uThreshold * 0.5);
-    float outputVal = step(uThreshold, ditherResult);
+    float contrastLum = clamp((lum - 0.5) * (1.0 + uThreshold) + 0.5, 0.0, 1.0);
+    float scaled = contrastLum * numLevels;
     
-    // Generate dynamic HSL-based palette
-    // Lightness 0.01 for background (dark, nearly black)
-    // Lightness scales from 0.90 (saturation = 0, pure bright white)
-    // down to 0.50 (saturation = 1, pure highly saturated color!)
-    float lightnessFg = 0.90 - (uSaturation * 0.40);
-    vec3 colorBg = hsl2rgb(vec3(uHue, uSaturation, 0.01));
-    vec3 colorFg = hsl2rgb(vec3(uHue, uSaturation, lightnessFg));
+    // Use dither to decide whether to round up or down
+    float baseLevel = floor(scaled);
+    float fracLevel = fract(scaled);
+    int level = int(baseLevel);
+    if (fracLevel > ditherValue) {
+        level = level + 1;
+    }
+    level = clamp(level, 0, paletteSize - 1);
     
-    vec3 finalColor = mix(colorBg, colorFg, outputVal);
-    
+    vec3 finalColor = getPaletteColor(level);
     gl_FragColor = vec4(finalColor, 1.0);
 }

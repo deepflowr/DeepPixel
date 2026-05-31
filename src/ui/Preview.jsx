@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 
-const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay }) => {
+const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutputFrame, showOverlays = true }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const rendererRef = useRef(null);
@@ -60,6 +60,10 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay }) => {
       if (texture) {
         pipeline.textureAspect = inputManager.aspectRatio;
         pipeline.render(texture, time);
+        // Send frame to output window if open
+        if (onOutputFrame && renderer.domElement) {
+          onOutputFrame(renderer.domElement);
+        }
       }
     };
 
@@ -104,10 +108,11 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay }) => {
   return (
     <div className="preview-viewport">
       {/* Dynamic CRT CRT-scanline mask for analog physical texture */}
-      <div className="crt-overlay" />
+      {showOverlays && <div className="crt-overlay" />}
 
       {/* Frame Counter & Technical Dashboard Overlays */}
-      <div style={{
+      {showOverlays && (
+        <div className="fps-dashboard" style={{
         position: 'absolute',
         top: '16px',
         left: '16px',
@@ -131,6 +136,7 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay }) => {
         <div>BUFFERS: <span style={{ color: 'var(--text-primary)' }}>PING-PONG</span></div>
         <div>DIM: <span style={{ color: 'var(--text-primary)' }}>{resolution.w}×{resolution.h} px</span></div>
       </div>
+      )}
 
       {/* Main interactive canvas wrapper */}
       <div ref={containerRef} className="canvas-wrapper">
