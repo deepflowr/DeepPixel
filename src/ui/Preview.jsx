@@ -1,22 +1,36 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import * as THREE from 'three';
+import { getPerformanceStore } from '../performance-effects';
 
 const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutputFrame, showOverlays = true }) => {
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+  const overlayCanvasRef = useRef(null);  // 2D canvas for performance effects
   const rendererRef = useRef(null);
   const animationFrameIdRef = useRef(null);
+  const zoomTimerRef = useRef(null);
   
-  const [fps, setFps] = useState(60);
   const [resolution, setResolution] = useState({ w: 0, h: 0 });
   const [isLoading, setIsLoading] = useState(false);
+  const [zoomFrame, setZoomFrame] = useState(null);
+  const [showZoom, setShowZoom] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current || !canvasRef.current) return;
 
     // 1. Initialize WebGL Renderer
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
+    const containerW = containerRef.current.clientWidth;
+    const containerH = containerRef.current.clientHeight;
+
+    // Render at higher resolution (min 960w, max 1280w) so the WebSocket gets quality pixels
+    const getRenderSize = (cw, ch) => {
+      let rw = Math.max(cw, 960);
+      rw = Math.min(rw, 1280);
+      const rh = Math.round(rw * (ch / cw));
+      return { w: rw, h: rh };
+    };
+
+    const { w: renderW, h: renderH } = getRenderSize(containerW, containerH);
     
     const renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
@@ -25,14 +39,14 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
       preserveDrawingBuffer: true // Required for capturing PNG/JPEG exports!
     });
     
-    renderer.setSize(width, height, false);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(renderW, renderH, false); // false = don't touch CSS; CSS keeps it at container size
+    renderer.setPixelRatio(1); // We handle resolution manually
     rendererRef.current = renderer;
 
     // 2. Set renderer in pipeline
     pipeline.renderer = renderer;
-    pipeline.setSize(width, height);
-    setResolution({ w: width, h: height });
+    pipeline.setSize(renderW, renderH);
+    setResolution({ w: renderW, h: renderH });
 
     // 3. Render Loop Setup
     let lastTime = performance.now();
@@ -44,14 +58,6 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
       
       const time = now * 0.001; // convert to seconds
       
-      // Calculate FPS
-      frameCount++;
-      if (now - fpsIntervalStart >= 1000) {
-        setFps(Math.round((frameCount * 1000) / (now - fpsIntervalStart)));
-        frameCount = 0;
-        fpsIntervalStart = now;
-      }
-
       // Update texture if source is playing (video / camera)
       inputManager.update();
       
@@ -60,9 +66,21 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
       if (texture) {
         pipeline.textureAspect = inputManager.aspectRatio;
         pipeline.render(texture, time);
-        // Send frame to output window if open
-        if (onOutputFrame && renderer.domElement) {
-          onOutputFrame(renderer.domElement);
+
+        // ── Post-processing: performance effects on overlay canvas ──
+        try {
+          getPerformanceStore().processFrame(
+            renderer.domElement,
+            overlayCanvasRef.current
+          );
+        } catch (e) {
+          // silently ignore perf fx errors
+        }
+
+        // Send frame to viewer (use overlay canvas so performance FX are included)
+        if (onOutputFrame) {
+          const source = overlayCanvasRef.current || renderer.domElement;
+          onOutputFrame(source);
         }
       }
     };
@@ -73,12 +91,13 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
     // 4. Resize Observer to make canvas fully fluid and responsive
     const handleResize = () => {
       if (!containerRef.current || !rendererRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
+      const cw = containerRef.current.clientWidth;
+      const ch = containerRef.current.clientHeight;
+      const { w: rw, h: rh } = getRenderSize(cw, ch);
       
-      rendererRef.current.setSize(w, h, false);
-      pipeline.setSize(w, h);
-      setResolution({ w: w, h: h });
+      rendererRef.current.setSize(rw, rh, false);
+      pipeline.setSize(rw, rh);
+      setResolution({ w: rw, h: rh });
     };
 
     const resizeObserver = new ResizeObserver(() => {
@@ -105,42 +124,43 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
     };
   }, [inputManager, pipeline]);
 
+  // ── Hover zoom: capture frame and show popup ──
+  const captureZoomFrame = useCallback(() => {
+    if (!rendererRef.current) return;
+    const canvas = rendererRef.current.domElement;
+    if (!canvas) return;
+    setZoomFrame(canvas.toDataURL('image/jpeg', 0.9));
+  }, []);
+
+  const handleMouseEnter = useCallback(() => {
+    setShowZoom(true);
+    captureZoomFrame();
+    // Refresh the zoom frame periodically while hovering
+    zoomTimerRef.current = setInterval(captureZoomFrame, 200);
+  }, [captureZoomFrame]);
+
+  const handleMouseLeave = useCallback(() => {
+    setShowZoom(false);
+    if (zoomTimerRef.current) {
+      clearInterval(zoomTimerRef.current);
+      zoomTimerRef.current = null;
+    }
+  }, []);
+
   return (
-    <div className="preview-viewport">
+    <div
+      className="preview-viewport"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
       {/* Dynamic CRT CRT-scanline mask for analog physical texture */}
       {showOverlays && <div className="crt-overlay" />}
-
-      {/* Frame Counter & Technical Dashboard Overlays */}
-      {showOverlays && (
-        <div className="fps-dashboard" style={{
-        position: 'absolute',
-        top: '16px',
-        left: '16px',
-        fontFamily: 'var(--font-mono)',
-        fontSize: '0.7rem',
-        backgroundColor: 'rgba(24, 24, 27, 0.85)',
-        border: '1px solid var(--border-color)',
-        padding: '6px 10px',
-        borderRadius: '2px',
-        zIndex: 3,
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '4px',
-        backdropFilter: 'blur(4px)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className={`status-led ${fps > 45 ? 'green' : 'orange'}`} />
-          <span>FPS: <strong style={{ color: 'var(--accent-orange)' }}>{fps}</strong></span>
-        </div>
-        <div>RENDER: <span style={{ color: 'var(--text-primary)' }}>GPU_WEBGL2</span></div>
-        <div>BUFFERS: <span style={{ color: 'var(--text-primary)' }}>PING-PONG</span></div>
-        <div>DIM: <span style={{ color: 'var(--text-primary)' }}>{resolution.w}×{resolution.h} px</span></div>
-      </div>
-      )}
 
       {/* Main interactive canvas wrapper */}
       <div ref={containerRef} className="canvas-wrapper">
         <canvas ref={canvasRef} />
+        {/* Overlay canvas for performance effects (2D post-processing) */}
+        <canvas ref={overlayCanvasRef} className="perf-overlay-canvas" />
         
         {isLoading && (
           <div style={{
@@ -160,6 +180,13 @@ const Preview = ({ inputManager, pipeline, isVideoPlaying, onTogglePlay, onOutpu
           </div>
         )}
       </div>
+
+      {/* ── Hover zoom popup (2x, centered overlay) ── */}
+      {showZoom && zoomFrame && (
+        <div className="preview-zoom-popup">
+          <img className="preview-zoom-img" src={zoomFrame} alt="Preview zoom" />
+        </div>
+      )}
 
       {/* Overlay controls for Video playback (Play/Pause) */}
       {inputManager.activeSource === 'video' && (

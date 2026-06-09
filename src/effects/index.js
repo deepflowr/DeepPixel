@@ -12,26 +12,31 @@ import atkinsonDither from './atkinson-dither';
 import stucki from './stucki';
 import jarvis from './jarvis';
 import clusteredDot from './clustered-dot';
-import crosshatch from './crosshatch';
 import brickDither from './brick-dither';
 
-// Registry of all available effects in DeepPixel
+// Registry of all available effects in DeepPixel (15 effects, 4-column grid)
 export const AVAILABLE_EFFECTS = [
-  bayerDither,
-  scanlines,
+  // ── Col 1: 4 short+medium ──
   floydSteinberg,
-  halftone,
-  risograph,
-  glitch,
+  stucki,
   posterize,
+  atkinsonDither,
+
+  // ── Col 2: 4 medium ──
+  jarvis,
+  scanlines,
+  bayerDither,
   kaleidoscope,
+
+  // ── Col 3: 5 medium+tall (clusteredDot, risograph, halftone, feedback, cmykHalftone) ──
+  clusteredDot,
+  risograph,
+  halftone,
   feedback,
   cmykHalftone,
-  atkinsonDither,
-  stucki,
-  jarvis,
-  clusteredDot,
-  crosshatch,
+
+  // ── Col 4: 2 tall (glitch, brickDither) ──
+  glitch,
   brickDither
 ];
 

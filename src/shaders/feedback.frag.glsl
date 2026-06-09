@@ -1,79 +1,87 @@
+// Feedback — XOR feedback effect
+// Inspired by Shadertoy: XORs adjacent pixels from the input,
+// then blends with the previous frame (tFeedback) for temporal feedback trails.
+//
+// ORIGINAL: XOR feedback with source colors
+// PALETTE:  XOR feedback luminance mapped through palette
+
 uniform sampler2D tDiffuse;
 uniform sampler2D tFeedback;
-uniform float uTime;
+uniform vec2 uResolution;
 uniform float uFeedback;
 uniform float uDecay;
-uniform float uMix;
-uniform float uHue;
-uniform float uSaturation;
+uniform float uUseOriginalColors;
+uniform int uPaletteSize;
+uniform vec3 uColor0;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform vec3 uColor4;
+uniform vec3 uColor5;
+uniform vec3 uColor6;
+uniform vec3 uColor7;
 
 varying vec2 vUv;
 
-float hue2rgb(float f1, float f2, float hue) {
-    if (hue < 0.0) hue += 1.0;
-    if (hue > 1.0) hue -= 1.0;
-    if (hue < 1.0/6.0) return f1 + (f2 - f1) * 6.0 * hue;
-    if (hue < 1.0/2.0) return f2;
-    if (hue < 2.0/3.0) return f1 + (f2 - f1) * (2.0/3.0 - hue) * 6.0;
-    return f1;
+vec3 getPaletteColor(int idx) {
+    if (idx == 0) return uColor0;
+    if (idx == 1) return uColor1;
+    if (idx == 2) return uColor2;
+    if (idx == 3) return uColor3;
+    if (idx == 4) return uColor4;
+    if (idx == 5) return uColor5;
+    if (idx == 6) return uColor6;
+    return uColor7;
 }
 
-vec3 hsl2rgb(vec3 hsl) {
-    vec3 rgb;
-    if (hsl.y == 0.0) {
-        rgb = vec3(hsl.z);
-    } else {
-        float f2;
-        if (hsl.z < 0.5)
-            f2 = hsl.z * (1.0 + hsl.y);
-        else
-            f2 = hsl.z + hsl.y - hsl.z * hsl.y;
-        float f1 = 2.0 * hsl.z - f2;
-        rgb.r = hue2rgb(f1, f2, hsl.x + 1.0/3.0);
-        rgb.g = hue2rgb(f1, f2, hsl.x);
-        rgb.b = hue2rgb(f1, f2, hsl.x - 1.0/3.0);
-    }
-    return rgb;
-}
-
-vec3 rgb2hsl(vec3 rgb) {
-    float max = max(max(rgb.r, rgb.g), rgb.b);
-    float min = min(min(rgb.r, rgb.g), rgb.b);
-    float h, s, l = (max + min) / 2.0;
-    if (max == min) {
-        h = s = 0.0;
-    } else {
-        float d = max - min;
-        s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
-        if (max == rgb.r) h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6.0 : 0.0);
-        else if (max == rgb.g) h = (rgb.b - rgb.r) / d + 2.0;
-        else h = (rgb.r - rgb.g) / d + 4.0;
-        h /= 6.0;
-    }
-    return vec3(h, s, l);
+float getLuminance(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
 void main() {
-    vec4 current = texture2D(tDiffuse, vUv);
-    vec4 feedback = texture2D(tFeedback, vUv);
+    vec2 uv = vUv;
 
-    float feedbackAmt = uFeedback;
-    vec4 blended = mix(current, feedback, feedbackAmt);
+    // Flip X for mirror effect (like a webcam mirror)
+    vec2 uv_cam = vec2(1.0 - uv.x, uv.y);
 
-    blended.rgb *= uDecay;
+    // Sample current pixel and pixel below from input
+    vec3 col1 = texture2D(tDiffuse, uv_cam).rgb;
+    vec3 col2 = texture2D(tDiffuse, uv_cam + vec2(0.0, 1.0) / uResolution).rgb;
 
-    float lum = dot(current.rgb, vec3(0.299, 0.587, 0.114));
-    blended.rgb += current.rgb * lum * 0.3;
+    vec3 col;
+    int pSize = uPaletteSize;
 
-    vec3 finalRgb = mix(current.rgb, blended.rgb, uMix);
+    if (uUseOriginalColors > 0.5) {
+        // ── ORIGINAL: XOR raw input colors ──
+        ivec3 icol1 = ivec3(col1 * 255.0);
+        ivec3 icol2 = ivec3(col2 * 255.0);
+        ivec3 icol = ivec3(icol1.r ^ icol2.r, icol1.g ^ icol2.g, icol1.b ^ icol2.b);
+        col = vec3(icol) / 255.0;
+    } else {
+        // ── PALETTE: map input colors to palette BEFORE XOR ──
+        // This keeps the feedback loop consistent — no recursive palette remapping.
+        float lum1 = getLuminance(col1);
+        int idx1 = clamp(int(floor(lum1 * float(pSize - 1) + 0.5)), 0, pSize - 1);
+        vec3 pal1 = getPaletteColor(idx1);
 
-    vec3 hsl = rgb2hsl(finalRgb);
-    hsl.x = uHue;
-    hsl.y = mix(hsl.y, uSaturation, 0.5);
-    vec3 tinted = hsl2rgb(hsl);
+        float lum2 = getLuminance(col2);
+        int idx2 = clamp(int(floor(lum2 * float(pSize - 1) + 0.5)), 0, pSize - 1);
+        vec3 pal2 = getPaletteColor(idx2);
 
-    float tintAmt = uSaturation * 0.4;
-    finalRgb = mix(finalRgb, tinted, tintAmt);
+        // XOR the palette colors directly
+        ivec3 icol1 = ivec3(pal1 * 255.0);
+        ivec3 icol2 = ivec3(pal2 * 255.0);
+        ivec3 icol = ivec3(icol1.r ^ icol2.r, icol1.g ^ icol2.g, icol1.b ^ icol2.b);
+        col = vec3(icol) / 255.0;
+    }
 
-    gl_FragColor = vec4(finalRgb, 1.0);
+    // Feedback from previous frame (tFeedback)
+    // In PALETTE mode, tFeedback already contains palette-color-space output → consistent loop.
+    vec3 bb_col = texture2D(tFeedback, uv - vec2(0.0, 2.0) / uResolution).rgb;
+
+    // Blend feedback into current frame
+    col = max(col, uFeedback * pow(bb_col * uDecay, vec3(1.0 / 0.9)));
+
+    // No final palette mapping — already done before XOR (PALETTE) or not needed (ORIGINAL)
+    gl_FragColor = vec4(col, 1.0);
 }

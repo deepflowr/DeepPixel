@@ -1,94 +1,125 @@
+// Glitch / VHS distortion
+// Inspired by Shadertoy — horizontal block glitch, RGB separation, cell quantization,
+// animated grain, vignette, and red center glow.
+// Adapted to DeepPixel with ORIGINAL / PALETTE mode support.
+
 uniform sampler2D tDiffuse;
 uniform vec2 uResolution;
 uniform float uTime;
 
 uniform float uIntensity;
-uniform float uBlockSize;
-uniform float uRgbShift;
+uniform float uCellSize;
 uniform float uSpeed;
-uniform float uScanDistortion;
+uniform float uRgbShift;
+uniform float uUseOriginalColors;
+uniform int uPaletteSize;
+uniform vec3 uColor0;
+uniform vec3 uColor1;
+uniform vec3 uColor2;
+uniform vec3 uColor3;
+uniform vec3 uColor4;
+uniform vec3 uColor5;
+uniform vec3 uColor6;
+uniform vec3 uColor7;
 
 varying vec2 vUv;
 
-// --- Pseudo-random hash (stateless, GPU-friendly) ---
-float hash(vec2 co) {
-    return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
+float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
 }
 
-// Secondary hash with different magic numbers to avoid correlation
-float hash2(vec2 co) {
-    return fract(sin(dot(co, vec2(63.7718, 27.1139))) * 29483.2951);
+float hash2(vec2 p) {
+    return fract(sin(dot(p, vec2(269.5, 183.3))) * 43758.5453123);
+}
+
+vec3 getPaletteColor(int idx) {
+    if (idx == 0) return uColor0;
+    if (idx == 1) return uColor1;
+    if (idx == 2) return uColor2;
+    if (idx == 3) return uColor3;
+    if (idx == 4) return uColor4;
+    if (idx == 5) return uColor5;
+    if (idx == 6) return uColor6;
+    return uColor7;
+}
+
+float getLuminance(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
 void main() {
-    // Discrete time step — produces stuttery jumps instead of smooth animation
-    float t = floor(uTime * uSpeed);
-
-    // Start with original UV coordinates
     vec2 uv = vUv;
+    float t = uTime * uSpeed;
 
-    // -------------------------------------------------
-    // 1. VHS-style wavy horizontal scan distortion
-    //    Simulates a damaged tape with wobbly scanlines
-    // -------------------------------------------------
-    float scanWave = sin(vUv.y * 80.0 + uTime * uSpeed * 3.0)
-                   * sin(vUv.y * 22.0 - uTime * uSpeed * 1.7)
-                   * uScanDistortion * uIntensity * 0.01;
-    uv.x += scanWave;
+    // ── Glitch amplitude (noise-driven, replaces Shadertoy's audio input) ──
+    float amp = hash(vec2(floor(t), 0.0)) * uIntensity;
 
-    // -------------------------------------------------
-    // 2. Horizontal block displacement
-    //    Divides the image into strips and shifts some
-    //    strips left or right at random each time-step
-    // -------------------------------------------------
-    // Quantize the vertical position into blocks
-    float blockY = floor(uv.y / uBlockSize) * uBlockSize;
+    // ── Normalized coords (-1 to 1) ──
+    vec2 fragCoord = uv * uResolution;
+    vec2 V = 1.0 - 2.0 * fragCoord / uResolution;
 
-    // Decide per-block: should this block glitch?
-    float blockRand = hash(vec2(blockY, t));
+    // ── Horizontal glitch offset ──
+    // The offset is modulated by a vertical cosine wave so different rows
+    // shift at different phases, creating a tearing / VHS feel.
+    float offX = smoothstep(
+        0.0,
+        amp * uCellSize * 0.5,
+        cos(t + uv.y * 5.0)
+    ) - 0.5;
 
-    // Only displace blocks that pass a random threshold scaled by intensity
-    float displace = 0.0;
-    if (blockRand > 1.0 - uIntensity) {
-        // Displacement amount: signed, proportional to intensity
-        displace = (hash(vec2(blockY + 1.0, t)) - 0.5) * 2.0 * uIntensity * 0.15;
-    }
-    uv.x += displace;
+    vec2 off = vec2(offX, 0.0);
 
-    // -------------------------------------------------
-    // 3. RGB channel separation (chromatic aberration)
-    //    Each channel is sampled at a slightly different
-    //    horizontal offset, producing colour fringing
-    // -------------------------------------------------
-    float shift = uRgbShift * uIntensity;
+    // ── RGB channel separation at different offset depths ──
+    float rShift = uRgbShift * 0.04;
+    float gShift = uRgbShift * 0.05;
+    float bShift = uRgbShift * 0.06;
 
-    // Per-frame random direction tweak keeps the shift lively
-    float shiftDir = hash2(vec2(t, 3.71)) - 0.5;
+    float r = texture2D(tDiffuse, uv + off * rShift * 15.0).r;
+    float g = texture2D(tDiffuse, uv + off * gShift * 15.0).g;
+    float b = texture2D(tDiffuse, uv + off * bShift * 15.0).b;
 
-    vec2 rOff = vec2( shift * shiftDir,  shift * 0.3);
-    vec2 gOff = vec2(0.0, 0.0);
-    vec2 bOff = vec2(-shift * shiftDir, -shift * 0.3);
+    vec3 glitchTex = vec3(r, g, b);
 
-    float r = texture2D(tDiffuse, uv + rOff).r;
-    float g = texture2D(tDiffuse, uv + gOff).g;
-    float b = texture2D(tDiffuse, uv + bOff).b;
+    // ── Base color depends on mode ──
+    vec3 baseColor;
 
-    // Preserve original alpha from center sample
-    float a = texture2D(tDiffuse, uv).a;
-
-    // -------------------------------------------------
-    // 4. Occasional bright horizontal glitch line
-    //    Adds a thin white flash across a random strip
-    // -------------------------------------------------
-    float lineGlitch = 0.0;
-    float lineSlot = floor(vUv.y * 200.0);
-    float lineRand = hash(vec2(lineSlot, t + 9.3));
-    if (lineRand > 1.0 - uIntensity * 0.05) {
-        lineGlitch = 0.6 * uIntensity;
+    if (uUseOriginalColors > 0.5) {
+        // ORIGINAL: full source image with glitch texture overlaid
+        vec3 src = texture2D(tDiffuse, uv).rgb;
+        // Mix source with glitch texture for the RGB-fringe look
+        baseColor = mix(src, glitchTex, 0.6 * uIntensity);
+    } else {
+        // PALETTE: dark base with glitch texture quantized to palette
+        float lum = getLuminance(glitchTex);
+        int pSize = uPaletteSize;
+        int idx = clamp(int(floor(lum * float(pSize - 1) + 0.5)), 0, pSize - 1);
+        baseColor = getPaletteColor(idx);
     }
 
-    vec3 color = vec3(r, g, b) + lineGlitch;
+    // ── Animated grain ──
+    float grain = 0.06 * hash2(t + V * vec2(1462.439, 297.185));
 
-    // When intensity is 0 all offsets & additions are 0 → image passes through
-    gl_FragColor = vec4(color, a);
+    // ── Vignette ──
+    float vignette = 1.25 * (1.0 - smoothstep(0.1, 1.8, length(V * V)));
+    vignette = clamp(vignette, 0.0, 1.0);
+
+    // ── Cell glitch blocks ──
+    // Quantizes vertical position into horizontal blocks.
+    // Thin dark separator line at the bottom of each block,
+    // rest of the block is bright (matches the original Shadertoy).
+    float cellUV = fract(uv.y / uCellSize);
+    float cellMask = (cellUV < 0.01) ? 0.4 : 1.4;
+
+    // ── Red center glow ──
+    float redGlow = 0.14 * pow(1.0 - length(V * vec2(0.5, 0.35)), 3.0);
+    redGlow = max(redGlow, 0.0);
+
+    // ── Composite ──
+    vec3 finalColor = baseColor;
+    finalColor += grain;
+    finalColor *= vignette;
+    finalColor *= cellMask;
+    finalColor += vec3(redGlow, 0.0, 0.0);
+
+    gl_FragColor = vec4(finalColor, 1.0);
 }

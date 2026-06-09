@@ -3,19 +3,19 @@ import React, { useRef } from 'react';
 // Procedural source definitions for VJing
 export const PROC_SOURCES = [
   {
-    id: 'test-pattern',
-    label: 'Barras de Prueba',
-    description: 'Barras de color SMPTE + rampa de grises + checkerboard + ruido fino. Ideal para calibrar efectos.'
+    id: 'neon-city',
+    label: 'Neon City',
+    description: 'Ciudad cyberpunk neon con grid, sol y edificios. Shader GLSL en tiempo real.'
   },
   {
-    id: 'crt-texture',
-    label: 'Textura CRT',
-    description: 'Ruido pixelado animado con bandas VHS, fringe cromático y barras de scan. Alta frecuencia para dithering.'
+    id: 'wireframe',
+    label: 'Wireframe 3D',
+    description: 'Malla alámbrica 3D verde con perspectiva warp y oscilación. Shader GLSL en tiempo real.'
   },
   {
-    id: 'moire',
-    label: 'Moiré Geométrico',
-    description: 'Círculos concéntricos, spoke pattern y grilla rotatoria. Crea patrones de interferencia con halftone.'
+    id: 'plasma',
+    label: 'Plasma Retrowave',
+    description: 'Plasma retro con paleta Amiga RGB444, pixel art animado. Shader GLSL en tiempo real.'
   }
 ];
 

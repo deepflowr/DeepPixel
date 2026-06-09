@@ -3,7 +3,7 @@ import fragmentShader from '../shaders/glitch.frag.glsl?raw';
 
 export default {
   id: 'glitch',
-  label: 'Glitch',
+  label: 'VHS',
   category: 'destroy',
 
   params: {
@@ -12,24 +12,16 @@ export default {
       label: 'Intensidad',
       min: 0,
       max: 1,
-      default: 0.3,
+      default: 0.5,
       step: 0.02
     },
-    blockSize: {
+    cellSize: {
       type: 'float',
-      label: 'Bloques',
+      label: 'Tamaño Bloque',
       min: 0.01,
-      max: 0.2,
-      default: 0.05,
+      max: 0.3,
+      default: 0.08,
       step: 0.005
-    },
-    rgbShift: {
-      type: 'float',
-      label: 'Shift RGB',
-      min: 0,
-      max: 0.05,
-      default: 0.01,
-      step: 0.001
     },
     speed: {
       type: 'float',
@@ -39,13 +31,20 @@ export default {
       default: 3,
       step: 0.5
     },
-    scanDistortion: {
+    rgbShift: {
       type: 'float',
-      label: 'Distorsión VHS',
+      label: 'Separación RGB',
       min: 0,
       max: 1,
-      default: 0.2,
+      default: 0.5,
       step: 0.02
+    },
+    palette: {
+      type: 'palette',
+      label: 'Paleta',
+      default: ['#000811', '#0a2647', '#1a3a6b', '#4a7fc7'],
+      minColors: 2,
+      maxColors: 8
     }
   },
 

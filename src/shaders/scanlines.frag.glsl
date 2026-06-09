@@ -1,29 +1,151 @@
+// CRT / NTSC Decode Effect
+// Adapted from Shadertoy — DECODE NTSC AND CRT EFFECTS
+//
+// Full NTSC signal simulation: fish-eye, vignette, luma/chroma separation,
+// color subcarrier modulation, scanline flicker, interference.
+
 uniform sampler2D tDiffuse;
-uniform float uIntensity;
-uniform int uSpacing;
-uniform float uTime;
-uniform float uSpeed;
 uniform vec2 uResolution;
+uniform float uTime;
+uniform float uBrightness;
+uniform float uSaturation;
+uniform float uBlur;
+uniform float uScanFlicker;
+uniform float uSubcarrier;
+uniform float uInterference;
+uniform float uFishEye;
+uniform float uVignette;
 
 varying vec2 vUv;
 
+#define PI 3.14159265
+#define CHROMA_MOD_FREQ (0.4 * PI)
+#define YRES (33.0 * 8.0)
+#define XRES (54.0 * 8.0)
+
+// ── Random for interference ──
+float random(vec2 n, float t) {
+    return fract(sin(dot(n + t, vec2(12.9898, 78.233))) * 43758.5453);
+}
+
+// ── Fish-eye ──
+vec2 fisheye(vec2 uv, float fx, float fy) {
+    uv *= vec2(1.0 + (uv.y * uv.y) * fx, 1.0 + (uv.x * uv.x) * fy);
+    return uv * 1.02;
+}
+
+// ── Vignette ──
+float vignette(vec2 uv, float strength) {
+    uv *= 1.99;
+    float amount = 1.0 - sqrt(pow(abs(uv.x), 160.0) + pow(abs(uv.y), 160.0));
+    return smoothstep(0.0, strength, amount);
+}
+
+// ── YIQ → RGB ──
+const mat3 yiq2rgb_mat = mat3(
+    1.0, 1.0, 1.0,
+    0.956, -0.2720, -1.1060,
+    0.6210, -0.6474, 1.7046
+);
+
+vec3 yiq2rgb(vec3 yiq) {
+    return yiq2rgb_mat * yiq;
+}
+
+// ── FIR filter kernels (25 taps) ──
+#define KERNEL 25
+const float luma_filter[KERNEL] = float[KERNEL](
+    0.0105, 0.0134, 0.0057, -0.0242, -0.0824,
+    -0.1562, -0.2078, -0.185, -0.0546, 0.1626,
+    0.3852, 0.5095, 0.5163, 0.4678, 0.2844,
+    0.0515, -0.1308, -0.2082, -0.1891, -0.1206,
+    -0.0511, -0.0065, 0.0114, 0.0127, 0.008
+);
+
+const float chroma_filter[KERNEL] = float[KERNEL](
+    0.001, 0.001, 0.0001, 0.0002, -0.0003,
+    0.0062, 0.012, -0.0079, 0.0978, 0.1059,
+    -0.0394, 0.2732, 0.2941, 0.1529, -0.021,
+    0.1347, 0.0415, -0.0032, 0.0115, 0.002,
+    -0.0001, 0.0002, 0.001, 0.001, 0.001
+);
+
+vec3 get(vec2 uv, float off, float d, float yscale) {
+    float offd = off * d;
+    return texture2D(tDiffuse, uv + vec2(offd, yscale * offd)).xyz;
+}
+
+float peak(float x, float xpos, float scale) {
+    return clamp((1.0 - x) * scale * log(1.0 / abs(x - xpos)), 0.0, 1.0);
+}
+
+// ── Main ──
 void main() {
-    vec4 texColor = texture2D(tDiffuse, vUv);
-    
-    // Calculate vertical scanline pattern based on UV coordinates and canvas resolution
-    // Spacing determines how many pixels between scanline peaks
-    // Temporal: scroll scanlines downward
-    float yPixel = vUv.y * uResolution.y + uTime * uSpeed * 30.0;
-    
-    // Analog sine-wave scanline modulation (more CRT-authentic than simple hard steps)
-    float wave = sin(yPixel * 3.14159265 / float(uSpacing)) * 0.5 + 0.5;
-    
-    // Modulate intensity: 1.0 - uIntensity * wave
-    // If intensity is 0, multiplier is 1.0 (no effect)
-    // If intensity is 1, multiplier goes down to 0.0 at the trough of the wave
-    float scanlineVal = 1.0 - (uIntensity * (1.0 - wave));
-    
-    vec3 finalColor = texColor.rgb * scanlineVal;
-    
-    gl_FragColor = vec4(finalColor, 1.0);
+    vec2 uv = vUv;
+    float scany = round(uv.y * YRES);
+
+    // ── Fish-eye ──
+    uv -= vec2(0.5);
+    float fe = max(uFishEye, 0.001);
+    uv = fisheye(uv, fe * 0.4, fe);
+    float vign = vignette(uv, uVignette);
+    uv += vec2(0.5);
+
+    // ── Scanline flicker ──
+    float mframe = mod(floor(uTime * 60.0), 2.0);
+    uv.y += mframe * 1.0 / YRES * uScanFlicker;
+
+    // ── Interference ──
+    float r = random(vec2(0.0, scany), uTime);
+    if (r > 0.995) { r *= 3.0; }
+    float ifx1 = uInterference * 2.0 / uResolution.x * r;
+    float ifx2 = uInterference * (r * peak(uv.y, 0.2, 0.2));
+    uv.x += ifx1 - ifx2;
+
+    // ── Luma/chroma separation (FIR filter) ──
+    float d = 1.0 / XRES * (0.2 + ifx2 * 100.0);
+    vec3 lsignal = vec3(0.0);
+    vec3 csignal = vec3(0.0);
+    for (int i = 0; i < KERNEL; i++) {
+        float offset = float(i) - 12.0;
+        vec3 suml = get(uv, offset, d, 0.67);
+        lsignal += suml * vec3(luma_filter[i], 0.0, 0.0);
+        vec3 sumc = get(uv, offset, d * 6.0, 0.67);
+        csignal += sumc * vec3(0.0, chroma_filter[i], chroma_filter[i]);
+    }
+
+    vec3 sat = texture2D(tDiffuse, uv).xyz;
+    vec3 lumat = sat * vec3(1.0, 0.0, 0.0);
+    vec3 chroat = sat * vec3(0.0, 1.0, 1.0);
+
+    float blr = clamp(uBlur, 0.0, 0.95);
+    vec3 signal = lumat * (1.0 - blr) + blr * lsignal
+                + chroat * (1.0 - 0.7) + 0.7 * csignal;
+
+    // ── Scanlines ──
+    float scanl = 0.5 + 0.5 * abs(sin(PI * uv.y * YRES));
+
+    // ── Chroma decoding ──
+    float lchroma = signal.y * uSaturation;
+    float phase = signal.z * 6.28318530718;
+
+    signal.x *= uBrightness;
+    signal.y = lchroma * sin(phase);
+    signal.z = lchroma * cos(phase);
+
+    // ── Color subcarrier ──
+    float chroma_phase = uTime * 60.0 * PI * 0.6667;
+    float mod_phase = chroma_phase + (uv.x + uv.y * 0.1) * CHROMA_MOD_FREQ * XRES * 2.0;
+    float scarrier = uSubcarrier * lchroma;
+    float i_mod = cos(mod_phase);
+    float q_mod = sin(mod_phase);
+
+    signal.x *= 0.1 * scarrier * q_mod + 1.0 - ifx2 * 30.0;
+    signal.y *= scarrier * i_mod + 1.0;
+    signal.z *= scarrier * q_mod + 1.0;
+
+    vec3 out_color = signal;
+    vec3 rgb = vign * scanl * yiq2rgb(out_color);
+
+    gl_FragColor = vec4(rgb, 1.0);
 }

@@ -3,41 +3,17 @@ import fragmentShader from '../shaders/clustered-dot.frag.glsl?raw';
 
 export default {
   id: 'clustered-dot',
-  label: 'Clustered Dot',
-  category: 'dither',
+  label: 'ASCII Art',
+  category: 'retro',
 
   params: {
-    dotSize: {
+    blockSize: {
       type: 'int',
-      label: 'Trama',
-      min: 2,
-      max: 20,
-      default: 6,
+      label: 'Bloque',
+      min: 4,
+      max: 32,
+      default: 8,
       step: 1
-    },
-    contrast: {
-      type: 'float',
-      label: 'Contraste',
-      min: 0.0,
-      max: 1.0,
-      default: 0.5,
-      step: 0.02
-    },
-    speed: {
-      type: 'float',
-      label: 'Velocidad',
-      min: 0.0,
-      max: 5.0,
-      default: 0.5,
-      step: 0.1
-    },
-    angle: {
-      type: 'float',
-      label: 'Ángulo',
-      min: 0.0,
-      max: 6.28,
-      default: 0.0,
-      step: 0.05
     },
     palette: {
       type: 'palette',
@@ -51,5 +27,5 @@ export default {
   renderer: 'glsl',
   vertexShader,
   fragmentShader,
-  svgExportable: true
+  svgExportable: false
 };

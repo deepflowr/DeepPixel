@@ -5,37 +5,31 @@ export default {
   id: 'bayer-dither',
   label: 'Dither Bayer',
   category: 'dither',
-  
+
   params: {
-    threshold: {
-      type: 'float',
-      label: 'Umbral',
-      min: 0.0,
-      max: 1.0,
-      default: 0.5,
-      step: 0.01
-    },
-    matrixSize: {
-      type: 'select',
-      label: 'Tamaño Matriz',
-      options: [2, 4, 8],
-      default: 4
-    },
-    speed: {
-      type: 'float',
-      label: 'Velocidad',
-      min: 0.0,
-      max: 5.0,
-      default: 0.5,
-      step: 0.1
-    },
     pixelSize: {
       type: 'int',
-      label: 'Pixelado',
+      label: 'Escala',
       min: 1,
-      max: 16,
+      max: 32,
       default: 1,
       step: 1
+    },
+    gamma: {
+      type: 'float',
+      label: 'Gamma',
+      min: 0.0,
+      max: 1.0,
+      default: 0.0,
+      step: 0.05
+    },
+    contrast: {
+      type: 'float',
+      label: 'Contraste',
+      min: 0.0,
+      max: 1.0,
+      default: 0.0,
+      step: 0.02
     },
     palette: {
       type: 'palette',
@@ -45,7 +39,7 @@ export default {
       maxColors: 8
     }
   },
-  
+
   renderer: 'glsl',
   vertexShader,
   fragmentShader,

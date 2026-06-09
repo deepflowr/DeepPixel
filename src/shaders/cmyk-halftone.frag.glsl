@@ -8,6 +8,7 @@ uniform float uAngleY;
 uniform float uAngleK;
 uniform float uTime;
 uniform float uSpeed;
+uniform float uUseOriginalColors;
 uniform int uPaletteSize;
 uniform vec3 uColor0;
 uniform vec3 uColor1;
@@ -24,13 +25,13 @@ float getLuminance(vec3 color) {
     return dot(color, vec3(0.299, 0.587, 0.114));
 }
 
-// Single-channel halftone dot at a given angle
-float halftoneDot(vec2 uv, float angle, float freq, float intensity) {
+// Single-channel halftone dot at a given angle.
+// uv is expected in grid-space (1 unit = 1 halftone cell).
+float halftoneDot(vec2 uv, float angle, float intensity) {
     float c = cos(angle);
     float s = sin(angle);
     vec2 rotUv = vec2(uv.x * c - uv.y * s, uv.x * s + uv.y * c);
-    vec2 gridPos = rotUv * freq;
-    vec2 cell = fract(gridPos) - 0.5;
+    vec2 cell = fract(rotUv) - 0.5;
     float radius = intensity * 0.6;
     float dist = length(cell);
     return 1.0 - smoothstep(radius - 0.1, radius + 0.1, dist);
@@ -54,7 +55,7 @@ void main() {
     // ── Traditional CMYK separation (ink percentages 0..1) ──
     float c = 1.0 - rgb.r;
     float m = 1.0 - rgb.g;
-    float y = 1.0 - rgb.y;
+    float y = 1.0 - rgb.b;
 
     // Extract black component
     float k = min(c, min(m, y));
@@ -72,10 +73,10 @@ void main() {
 
     // ── Temporal: each channel rotates at its own speed ──
     float t = uTime * uSpeed;
-    float dotC = halftoneDot(uv, uAngleC + t * 0.15, freq, c);
-    float dotM = halftoneDot(uv, uAngleM + t * 0.20, freq, m);
-    float dotY = halftoneDot(uv, uAngleY + t * 0.10, freq, y);
-    float dotK = halftoneDot(uv, uAngleK + t * 0.25, freq, k);
+    float dotC = halftoneDot(uv, uAngleC + t * 0.15, c);
+    float dotM = halftoneDot(uv, uAngleM + t * 0.20, m);
+    float dotY = halftoneDot(uv, uAngleY + t * 0.10, y);
+    float dotK = halftoneDot(uv, uAngleK + t * 0.25, k);
 
     // ── Subtractive color mixing ──
     // Start with white paper, each ink absorbs its complementary color
@@ -102,12 +103,20 @@ void main() {
     float contrasted = pow(lum, contrast);
     cmykResult = cmykResult * (contrasted / max(lum, 0.001));
 
-    // ── Map through palette ──
-    int paletteSize = uPaletteSize;
-    float palLum = getLuminance(cmykResult);
-    int idx = int(floor(palLum * float(paletteSize - 1) + 0.5));
-    idx = clamp(idx, 0, paletteSize - 1);
-    vec3 finalColor = getPaletteColor(idx);
+    // ── Output based on mode ──
+    vec3 finalColor;
+
+    if (uUseOriginalColors > 0.5) {
+        // ── ORIGINAL: real CMYK subtractive color — the halftone with actual inks ──
+        finalColor = cmykResult;
+    } else {
+        // ── PALETTE: map CMYK luminance through palette colors ──
+        int paletteSize = uPaletteSize;
+        float palLum = getLuminance(cmykResult);
+        int idx = int(floor(palLum * float(paletteSize - 1) + 0.5));
+        idx = clamp(idx, 0, paletteSize - 1);
+        finalColor = getPaletteColor(idx);
+    }
 
     gl_FragColor = vec4(finalColor, 1.0);
 }

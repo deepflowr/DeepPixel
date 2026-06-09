@@ -27,9 +27,10 @@ class EffectPipeline {
     // CPU processing canvas
     this.offscreenCanvas = null;
     
-    // Global palette override
+    // Palette override & original colors passthrough
     this.useGlobalPalette = false;
     this.globalPalette = null;
+    this.useOriginalColors = false;
     this.offscreenCtx = null;
     this.cpuTexture = null;
     
@@ -93,7 +94,8 @@ class EffectPipeline {
     const uniforms = {
       tDiffuse: { value: null },
       uResolution: { value: new THREE.Vector2(this.width, this.height) },
-      uTime: { value: 0.0 }
+      uTime: { value: 0.0 },
+      uUseOriginalColors: { value: 0.0 }
     };
     
     Object.keys(effectConfig.params).forEach(paramKey => {
@@ -170,13 +172,14 @@ class EffectPipeline {
       this.offscreenCtx = this.offscreenCanvas.getContext('2d');
     }
 
-    // Try to draw from original image/video elements to avoid GPU sync block
+    // Try to draw from the input texture's image (img, video, canvas).
+    // This avoids a feedback loop vs reading from this.renderer.domElement
+    // which would contain the CPU effect's own previous output.
     const img = inputTexture.image || this.renderer.domElement;
     if (!img) return inputTexture;
 
     const pixelSize = Number(effect.activeParams.pixelSize) || 1;
     
-    // Sub-sampled canvas resolution matching dither level
     const sourceW = img.width || img.videoWidth || this.width;
     const sourceH = img.height || img.videoHeight || this.height;
     
@@ -186,6 +189,9 @@ class EffectPipeline {
     if (this.offscreenCanvas.width !== procW || this.offscreenCanvas.height !== procH) {
       this.offscreenCanvas.width = procW;
       this.offscreenCanvas.height = procH;
+    } else {
+      // Clear canvas to prevent stale frames if drawImage fails
+      this.offscreenCtx.clearRect(0, 0, procW, procH);
     }
 
     // Draw frame buffer
@@ -264,6 +270,11 @@ class EffectPipeline {
           material.uniforms.uResolution.value.set(this.width, this.height);
         }
         
+        // ── Original colors passthrough ──
+        if (material.uniforms['uUseOriginalColors']) {
+          material.uniforms['uUseOriginalColors'].value = this.useOriginalColors ? 1.0 : 0.0;
+        }
+
         // ── Global palette override: overwrite palette uniforms for ALL effects ──
         if (this.useGlobalPalette && this.globalPalette && this.globalPalette.length >= 2) {
           const globalColors = this.globalPalette;
@@ -281,7 +292,7 @@ class EffectPipeline {
           }
         }
 
-        const isFeedback = effect.id === 'feedback';
+        const isFeedback = effect.id === 'feedback' || effect.id === 'stucki';
 
         // ── Feedback effect: wire tFeedback texture ──
         if (isFeedback) {
@@ -294,9 +305,10 @@ class EffectPipeline {
 
         // For feedback, always render to a target first
         const target = isFeedback ? writeTarget : (isLast ? null : writeTarget);
-        const isSource = (currentInput === inputTexture || (this.cpuTexture && currentInput === this.cpuTexture));
         
-        this.renderQuad(material, currentInput, target, isSource);
+        // Apply aspect ratio only on the final render to screen (target === null)
+        // renderQuad itself checks target === null, but we signal intent with isLast
+        this.renderQuad(material, currentInput, target, isLast);
 
         // ── Feedback effect: capture output to persistent feedbackRT ──
         if (isFeedback) {
@@ -337,8 +349,10 @@ class EffectPipeline {
     
     this.mesh = new THREE.Mesh(this.geometry, material);
     
-    // Apply aspect ratio scale to mesh vertices
-    if (applyAspect && this.textureAspect) {
+    // Only apply aspect ratio when rendering to screen (renderTarget === null).
+    // For intermediate render targets, always render full-frame so effects
+    // don't process black letterbox bars.
+    if (applyAspect && renderTarget === null && this.textureAspect) {
       const canvasAspect = this.width / this.height;
       if (this.textureAspect > canvasAspect) {
         this.mesh.scale.y = canvasAspect / this.textureAspect;

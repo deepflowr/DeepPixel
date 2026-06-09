@@ -273,6 +273,10 @@ class InputManager {
 
       this.imageElement.onload = async () => {
         try {
+          // Ensure the image is fully decoded so CPU effects can
+          // draw from it reliably via canvas drawImage
+          await this.imageElement.decode();
+
           // For local files, apply EXIF orientation correction
           if (fileOrUrl instanceof File) {
             const orientation = await parseEXIFOrientation(fileOrUrl);

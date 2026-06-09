@@ -3,33 +3,24 @@ import fragmentShader from '../shaders/posterize.frag.glsl?raw';
 
 export default {
   id: 'posterize',
-  label: 'Posterización',
+  label: 'Posterizar',
   category: 'tone',
 
   params: {
-    levels: {
+    steps: {
       type: 'int',
-      label: 'Niveles',
+      label: 'Pasos',
       min: 2,
-      max: 16,
-      default: 4,
+      max: 32,
+      default: 6,
       step: 1
     },
-    hue: {
-      type: 'float',
-      label: 'Tono (Hue)',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0,
-      step: 0.01
-    },
-    saturation: {
-      type: 'float',
-      label: 'Saturación',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0,
-      step: 0.01
+    palette: {
+      type: 'palette',
+      label: 'Paleta',
+      default: ['#ffff00', '#ff00ff'],
+      minColors: 2,
+      maxColors: 8
     }
   },
 

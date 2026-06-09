@@ -31,21 +31,12 @@ export default {
       default: 0.0,
       step: 0.05
     },
-    hue: {
-      type: 'float',
-      label: 'Tono (Hue)',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0,
-      step: 0.01
-    },
-    saturation: {
-      type: 'float',
-      label: 'Saturación',
-      min: 0.0,
-      max: 1.0,
-      default: 0.0,
-      step: 0.01
+    palette: {
+      type: 'palette',
+      label: 'Paleta',
+      default: ['#ff0066', '#ffcc00', '#00ffcc', '#6600ff'],
+      minColors: 2,
+      maxColors: 8
     }
   },
 

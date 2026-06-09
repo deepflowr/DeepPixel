@@ -1,10 +1,12 @@
+// ASCII Art — character-based halftone
+// Renders source image using ASCII character bitmaps (5x5 grid per block).
+// ORIGINAL: source colors masked by character
+// PALETTE:  palette colors masked by character
+
 uniform sampler2D tDiffuse;
 uniform vec2 uResolution;
-uniform float uDotSize;
-uniform float uContrast;
-uniform float uAngle;
-uniform float uTime;
-uniform float uSpeed;
+uniform float uBlockSize;
+uniform float uUseOriginalColors;
 uniform int uPaletteSize;
 uniform vec3 uColor0;
 uniform vec3 uColor1;
@@ -17,8 +19,15 @@ uniform vec3 uColor7;
 
 varying vec2 vUv;
 
-float getLuminance(vec3 color) {
-    return dot(color, vec3(0.299, 0.587, 0.114));
+float character(int n, vec2 p) {
+    p = floor(p * vec2(-4.0, 4.0) + 2.5);
+    if (clamp(p.x, 0.0, 4.0) == p.x) {
+        if (clamp(p.y, 0.0, 4.0) == p.y) {
+            int a = int(round(p.x) + 5.0 * round(p.y));
+            if (((n >> a) & 1) == 1) return 1.0;
+        }
+    }
+    return 0.0;
 }
 
 vec3 getPaletteColor(int idx) {
@@ -32,68 +41,43 @@ vec3 getPaletteColor(int idx) {
     return uColor7;
 }
 
-// Clustered dot matrix 4x4
-float clusteredDot4(vec2 pos) {
-    int x = int(mod(pos.x, 4.0));
-    int y = int(mod(pos.y, 4.0));
-    int idx = x + y * 4;
-    // Clustered dot threshold matrix: center grows first
-    if (idx == 0) return 0.0;
-    if (idx == 1) return 8.0;
-    if (idx == 2) return 2.0;
-    if (idx == 3) return 10.0;
-    if (idx == 4) return 12.0;
-    if (idx == 5) return 4.0;
-    if (idx == 6) return 14.0;
-    if (idx == 7) return 6.0;
-    if (idx == 8) return 3.0;
-    if (idx == 9) return 11.0;
-    if (idx == 10) return 1.0;
-    if (idx == 11) return 9.0;
-    if (idx == 12) return 15.0;
-    if (idx == 13) return 7.0;
-    if (idx == 14) return 13.0;
-    return 5.0;
+float getLuminance(vec3 c) {
+    return dot(c, vec3(0.299, 0.587, 0.114));
 }
 
 void main() {
-    vec4 texColor = texture2D(tDiffuse, vUv);
-    float lum = getLuminance(texColor.rgb);
+    float bSize = max(uBlockSize, 4.0);
+    vec2 pix = vUv * uResolution;
 
-    vec2 uvCoord = vUv * uResolution;
-    float cosA = cos(uAngle);
-    float sinA = sin(uAngle);
-    vec2 center = uResolution * 0.5;
-    vec2 centered = uvCoord - center;
-    vec2 rotated = vec2(
-        centered.x * cosA - centered.y * sinA,
-        centered.x * sinA + centered.y * cosA
-    );
+    // Sample source at block level
+    vec3 srcCol = texture2D(tDiffuse, floor(pix / bSize) * bSize / uResolution).rgb;
 
-    // ── Temporal: grid drift ──
-    float timeOff = uTime * uSpeed * 10.0;
-    vec2 driftVec = vec2(timeOff, timeOff * 0.6);
-    float gridSize = max(uDotSize, 2.0);
-    vec2 cellCoord = floor((rotated + driftVec) / gridSize);
-    vec2 cellPos = (rotated + driftVec) - cellCoord * gridSize;
+    // Luminance → character selection
+    float gray = getLuminance(srcCol);
+    int n = 4096;
+    if (gray > 0.2) n = 65600;
+    if (gray > 0.3) n = 163153;
+    if (gray > 0.4) n = 15255086;
+    if (gray > 0.5) n = 13121101;
+    if (gray > 0.6) n = 15252014;
+    if (gray > 0.7) n = 13195790;
+    if (gray > 0.8) n = 11512810;
 
-    // ── Multi-level quantization with clustered dot dither ──
-    int paletteSize = uPaletteSize;
-    float numLevels = float(paletteSize - 1);
-    
-    float ditherValue = (clusteredDot4(cellPos) + 0.5) / 16.0;
-    float contrastLum = clamp((lum - 0.5) * (1.0 + uContrast) + 0.5, 0.0, 1.0);
-    float scaled = contrastLum * numLevels;
-    
-    // Use dither to decide whether to round up or down
-    float baseLevel = floor(scaled);
-    float fracLevel = fract(scaled);
-    int level = int(baseLevel);
-    if (fracLevel > ditherValue) {
-        level = level + 1;
+    // Character sub-grid position (centered 5x5 within block)
+    vec2 p = mod(pix / (bSize * 0.5), 2.0) - vec2(1.0);
+    float ch = character(n, p);
+
+    vec3 finalColor;
+    if (uUseOriginalColors > 0.5) {
+        // ORIGINAL: source colors masked by character
+        finalColor = srcCol * ch;
+    } else {
+        // PALETTE: palette color masked by character
+        float lum = getLuminance(srcCol);
+        int pSize = uPaletteSize;
+        int idx = clamp(int(floor(lum * float(pSize - 1) + 0.5)), 0, pSize - 1);
+        finalColor = getPaletteColor(idx) * ch;
     }
-    level = clamp(level, 0, paletteSize - 1);
-    
-    vec3 finalColor = getPaletteColor(level);
+
     gl_FragColor = vec4(finalColor, 1.0);
 }

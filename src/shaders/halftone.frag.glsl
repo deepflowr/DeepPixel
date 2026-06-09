@@ -5,6 +5,7 @@ uniform float uContrast;
 uniform float uAngle;
 uniform float uTime;
 uniform float uSpeed;
+uniform float uUseOriginalColors;
 uniform int uPaletteSize;
 uniform vec3 uColor0;
 uniform vec3 uColor1;
@@ -79,12 +80,20 @@ void main() {
     float edgeSmoothness = mix(maxRadius * 0.4, 0.5, uContrast);
     float dot = 1.0 - smoothstep(dotRadius - edgeSmoothness, dotRadius + edgeSmoothness, dist);
 
-    // ── Map through palette ──
-    int paletteSize = uPaletteSize;
-    float palLum = dot;
-    int idx = int(floor(palLum * float(paletteSize - 1) + 0.5));
-    idx = clamp(idx, 0, paletteSize - 1);
-    vec3 finalColor = getPaletteColor(idx);
+    // ── Output ──
+    vec3 finalColor;
+    if (uUseOriginalColors > 0.5) {
+        // Original mode: dot shows the original cell color on black background
+        // dot = 1 inside the dot (dark area), dot = 0 outside (bright area)
+        finalColor = mix(vec3(0.0), cellTexColor.rgb, dot);
+    } else {
+        // Palette mode: map dot luminance through palette colors
+        int paletteSize = uPaletteSize;
+        float palLum = dot;
+        int idx = int(floor(palLum * float(paletteSize - 1) + 0.5));
+        idx = clamp(idx, 0, paletteSize - 1);
+        finalColor = getPaletteColor(idx);
+    }
 
     gl_FragColor = vec4(finalColor, 1.0);
 }

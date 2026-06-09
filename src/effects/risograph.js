@@ -31,22 +31,6 @@ export default {
       default: 0.3,
       step: 0.02
     },
-    hue: {
-      type: 'float',
-      label: 'Tono Tinta',
-      min: 0,
-      max: 1,
-      default: 0.58,
-      step: 0.01
-    },
-    saturation: {
-      type: 'float',
-      label: 'Saturación',
-      min: 0,
-      max: 1,
-      default: 0.7,
-      step: 0.01
-    },
     split: {
       type: 'float',
       label: 'División Tonal',
@@ -54,6 +38,13 @@ export default {
       max: 0.8,
       default: 0.45,
       step: 0.02
+    },
+    palette: {
+      type: 'palette',
+      label: 'Paleta',
+      default: ['#1a1a2e', '#e94560'],
+      minColors: 2,
+      maxColors: 2
     }
   },
 
