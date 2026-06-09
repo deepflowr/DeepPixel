@@ -2,6 +2,10 @@ import express from 'express';
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
 import { randomUUID } from 'crypto';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const PORT = process.env.PORT || 3001;
 
@@ -14,6 +18,17 @@ const sessions = new Map();
 app.get('/health', (_req, res) => {
   res.json({ ok: true, sessions: sessions.size });
 });
+
+// ── In production, serve the built frontend ──
+if (process.env.NODE_ENV === 'production') {
+  const distPath = path.join(__dirname, 'dist');
+  app.use(express.static(distPath));
+
+  // SPA fallback: any non-API route → index.html
+  app.get('*', (_req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+}
 
 wss.on('connection', (ws) => {
   let sessionId = null;

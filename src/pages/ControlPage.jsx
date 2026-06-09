@@ -287,25 +287,34 @@ const ControlPage = () => {
     }
   }, []);
 
-  const baseUrl = window.location.origin + '/DeepPixel/';
+  const baseUrl = window.location.origin + import.meta.env.BASE_URL;
   const host = window.location.hostname || 'localhost';
-  const wsParam = `ws=${host}:3001`;
+  // In dev, WS runs on port 3001; in production, same port as the page
+  const wsParam = import.meta.env.DEV ? `ws=${host}:3001` : '';
+
+  const buildViewerUrl = (sid) => {
+    let url = `${baseUrl}viewer?session=${sid}`;
+    if (wsParam) url += `&${wsParam}`;
+    return url;
+  };
 
   // When session arrives after a link was already generated (without session),
   // auto-update the link with the session ID
   useEffect(() => {
     if (sessionId && viewerLink && !viewerLink.includes('session=')) {
-      setViewerLink(`${baseUrl}viewer?session=${sessionId}&${wsParam}`);
+      setViewerLink(buildViewerUrl(sessionId));
     }
   }, [sessionId]);
 
   // Viewer link
   const handleGenerateViewerLink = () => {
     if (sessionId) {
-      setViewerLink(`${baseUrl}viewer?session=${sessionId}&${wsParam}`);
+      setViewerLink(buildViewerUrl(sessionId));
     } else {
       // Without session, generate a basic link (viewer will show connecting)
-      setViewerLink(`${baseUrl}viewer?${wsParam}`);
+      let url = `${baseUrl}viewer`;
+      if (wsParam) url += `?${wsParam}`;
+      setViewerLink(url);
     }
     setViewerLinkCopied(false);
   };

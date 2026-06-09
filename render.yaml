@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: deeppixel
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: VITE_BASE_URL
+        value: /

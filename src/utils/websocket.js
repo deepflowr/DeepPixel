@@ -6,11 +6,14 @@
  *   viewer     — joins a session, receives frames
  */
 
-const WS_PORT = 3001;
-
 function getServerUrl() {
-  const host = window.location.hostname || 'localhost';
-  return `ws://${host}:${WS_PORT}`;
+  // In dev (Vite on port 5173), the WS server runs on port 3001
+  if (import.meta.env.DEV) {
+    return 'ws://localhost:3001';
+  }
+  // In production, Express serves both frontend and WS on the same port
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${protocol}//${window.location.host}`;
 }
 
 /**

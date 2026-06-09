@@ -25,7 +25,8 @@ const ViewerPage = () => {
     // ── Read URL params ──
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('session');
-    const wsAddr = params.get('ws') || 'localhost:3001';
+    const defaultWs = window.location.host || 'localhost:3001';
+    const wsAddr = params.get('ws') || defaultWs;
 
     if (!sessionId) {
       setStatus('no-session');

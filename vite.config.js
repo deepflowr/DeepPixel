@@ -4,8 +4,9 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  // Base path para GitHub Pages: https://<user>.github.io/DeepPixel/
-  base: '/DeepPixel/',
+  // Base path: Render usa '/' (root), GitHub Pages usa '/DeepPixel/'.
+  // Seteá VITE_BASE_URL=/ en Render, omitilo para GitHub Pages.
+  base: process.env.VITE_BASE_URL || '/DeepPixel/',
   build: {
     // Three.js is inherently large (WebGL, math, scene graph).
     // The 745 KB bundle is expected — suppress the non-actionable warning.
