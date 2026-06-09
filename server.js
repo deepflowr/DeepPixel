@@ -24,8 +24,9 @@ if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, 'dist');
   app.use(express.static(distPath));
 
-  // SPA fallback: any non-API route → index.html
-  app.get('*', (_req, res) => {
+  // SPA fallback: any unmatched route → index.html
+  // Note: Express 5 (path-to-regexp@8) no longer supports bare '*' route patterns.
+  app.use((_req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
