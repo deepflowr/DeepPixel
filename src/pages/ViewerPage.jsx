@@ -54,9 +54,10 @@ const ViewerPage = () => {
     let ws = null;
     let reconnectTimer = null;
 
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const connectWs = () => {
       setStatus('connecting');
-      ws = new WebSocket(`ws://${wsAddr}`);
+      ws = new WebSocket(`${wsProtocol}//${wsAddr}`);
 
       ws.onopen = () => {
         ws.send(JSON.stringify({ type: 'join-session', sessionId }));
